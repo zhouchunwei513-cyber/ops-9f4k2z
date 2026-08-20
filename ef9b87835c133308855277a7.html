@@ -6,6 +6,15 @@
     <title>Control Center</title>
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noydir, none">
     <meta name="referrer" content="no-referrer">
+    <meta name="theme-color" content="#0a0a1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="控制台">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.11.0/build/sha256.min.js"></script>
@@ -913,9 +922,9 @@
         window.addEventListener('DOMContentLoaded', () => {
             // Check login
             if (isLocked()) showLockState();
-            const authed = (sessionStorage.getItem('xm_admin') || '').startsWith('auth_');
+            const authed = (localStorage.getItem('xm_admin') || '').startsWith('auth_');
             if (authed) {
-                backendToken = sessionStorage.getItem('xm_tok') || '';
+                backendToken = localStorage.getItem('xm_tok') || '';
                 document.getElementById('loginScreen').style.display = 'none';
                 startSessionWatch();
                 loadData();
@@ -957,9 +966,9 @@
                 localStorage.removeItem('xm_fails');
                 localStorage.removeItem('xm_lock');
                 clearInterval(lockTimer);
-                sessionStorage.setItem('xm_admin', 'auth_' + Date.now());
+                localStorage.setItem('xm_admin', 'auth_' + Date.now());
                 backendToken = input;   // 会话期间作为统计后端 API 令牌
-                sessionStorage.setItem('xm_tok', input);
+                localStorage.setItem('xm_tok', input);
                 err.style.display = 'none';
                 document.getElementById('loginScreen').style.display = 'none';
                 startSessionWatch();
@@ -1015,7 +1024,7 @@
             if (ok === true) {
                 // 更新本机会话与离线校验哈希
                 backendToken = np;
-                sessionStorage.setItem('xm_tok', np);
+                localStorage.setItem('xm_tok', np);
                 try {
                     const digest = await sha256Hex(AUTH.salt + np);
                     if (digest) localStorage.setItem('xm_auth_hash', digest);
@@ -1035,8 +1044,8 @@
         // Logout
         function doLogout() {
             clearTimeout(sessionTimer);
-            sessionStorage.removeItem('xm_admin');
-            sessionStorage.removeItem('xm_tok');
+            localStorage.removeItem('xm_admin');
+            localStorage.removeItem('xm_tok');
             backendToken = '';
             location.reload();
         }
@@ -1564,6 +1573,15 @@
             if (source.includes('直接') || source.includes('direct')) return 'green';
             if (source.includes('Google') || source.includes('Bing') || source.includes('百度')) return 'blue';
             return 'yellow';
+        }
+    </script>
+
+    <!-- PWA: Service Worker 注册（小米13 安装到主屏幕必需） -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
         }
     </script>
 </body>
