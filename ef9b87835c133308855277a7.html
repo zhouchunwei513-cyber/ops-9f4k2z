@@ -546,8 +546,8 @@
                     </button>
                 </div>
 
-                <div style="background: rgba(108,92,231,.12); border: 1px solid rgba(108,92,231,.35); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7;">
-                    ℹ️ 概览四张卡片与「页面统计」为 <b style="color: var(--primary-light);">不蒜子真实数据</b>（按域名统计）；趋势 / 设备 / 小时 / 来源 / 访客明细为演示数据，接入统计后端后自动变为真实。
+                <div id="dataModeBanner" style="background: rgba(108,92,231,.12); border: 1px solid rgba(108,92,231,.35); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7;">
+                    ⏳ 正在连接统计后端...
                     <span id="localWarn" style="display:none; color: #e67e22;">⚠️ 检测到本地预览环境——本地打开时统计读到的是 localhost 的公共计数（数字异常大），请以线上地址为准。</span>
                 </div>
 
@@ -712,12 +712,16 @@
                                 <td>zhouchunwei513-cyber.github.io</td>
                             </tr>
                             <tr>
-                                <td style="color: var(--text-muted);">统计服务</td>
-                                <td>不蒜子 busuanzi.ibruce.info（真实数据）</td>
+                                <td style="color: var(--text-muted);">统计后端</td>
+                                <td><strong>api.aiduty.asia</strong>（Cloudflare Workers + KV，真实数据）</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">备用统计</td>
+                                <td>不蒜子 busuanzi.ibruce.info（后端离线时启用）</td>
                             </tr>
                             <tr>
                                 <td style="color: var(--text-muted);">后台地址</td>
-                                <td>/admin.html</td>
+                                <td>aiduty.asia（独立管理域）</td>
                             </tr>
                             <tr>
                                 <td style="color: var(--text-muted);">统计服务状态</td>
@@ -750,6 +754,62 @@
             sessionMs: 20 * 60 * 1000       // 20 分钟无操作自动登出
         };
         let busuanziData = null;      // cached real stats {site_pv, site_uv, page_pv}
+
+        // ---- 统计后端（Cloudflare Worker：api.aiduty.asia）----
+        // 后端在线时全部图表展示真实数据；离线时回退不蒜子/演示数据
+        let API_BASE = 'https://api.aiduty.asia';
+        try { API_BASE = localStorage.getItem('xm_api_base') || API_BASE; } catch (e) { /* keep default */ }
+        let backendData = null;       // /stats 返回的真实数据
+        let backendToken = '';        // 登录密钥（会话期间作为 API 令牌）
+
+        async function fetchBackendStats() {
+            try {
+                const res = await fetch(API_BASE + '/stats', {
+                    headers: { 'X-Token': backendToken },
+                    signal: AbortSignal.timeout(8000)
+                });
+                if (!res.ok) return null;
+                const d = await res.json();
+                return (d && d.ok) ? d : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 来源键名 → 显示名
+        function sourceLabel(key) {
+            if (key === 'direct' || key === '') return '直接访问';
+            const k = key.toLowerCase();
+            if (k.includes('baidu')) return '百度';
+            if (k.includes('google')) return 'Google';
+            if (k.includes('bing')) return 'Bing';
+            if (k.includes('sogou')) return '搜狗';
+            if (k.includes('so.com') || k.includes('360')) return '360搜索';
+            if (k.includes('weibo')) return '微博';
+            if (k.includes('zhihu')) return '知乎';
+            if (k.includes('qq.com')) return 'QQ/微信';
+            if (k.includes('github')) return 'GitHub';
+            return key;
+        }
+
+        function deviceLabel(key) {
+            return { desktop: '桌面端', mobile: '移动端', tablet: '平板' }[key] || key;
+        }
+
+        // 后端连接成功后：横幅 + 徽章全部切换为「真实数据」
+        function markRealData() {
+            const banner = document.getElementById('dataModeBanner');
+            if (banner) {
+                banner.innerHTML = '✅ 统计后端已连接（<b style="color: var(--primary-light);">' + API_BASE.replace(/^https?:\/\//, '') + '</b>）——以下全部数据均为真实访问记录。' +
+                    '<span id="localWarn" style="display:none;"></span>';
+            }
+            document.querySelectorAll('.badge').forEach(el => {
+                if (el.textContent.trim() === '演示数据') {
+                    el.textContent = '真实数据';
+                    el.className = 'badge green';
+                }
+            });
+        }
 
         // Load busuanzi stats via JSONP (once per page load, with retry for transient errors)
         function loadBusuanzi() {
@@ -838,6 +898,7 @@
             if (isLocked()) showLockState();
             const authed = (sessionStorage.getItem('xm_admin') || '').startsWith('auth_');
             if (authed) {
+                backendToken = sessionStorage.getItem('xm_tok') || '';
                 document.getElementById('loginScreen').style.display = 'none';
                 startSessionWatch();
                 loadData();
@@ -860,6 +921,8 @@
                 localStorage.removeItem('xm_lock');
                 clearInterval(lockTimer);
                 sessionStorage.setItem('xm_admin', 'auth_' + Date.now());
+                backendToken = input;   // 会话期间作为统计后端 API 令牌
+                sessionStorage.setItem('xm_tok', input);
                 err.style.display = 'none';
                 document.getElementById('loginScreen').style.display = 'none';
                 startSessionWatch();
@@ -873,6 +936,8 @@
         function doLogout() {
             clearTimeout(sessionTimer);
             sessionStorage.removeItem('xm_admin');
+            sessionStorage.removeItem('xm_tok');
+            backendToken = '';
             location.reload();
         }
 
@@ -903,9 +968,13 @@
             }
         })();
 
-        // Load data (busuanzi fetched once, cached for refreshes)
+        // Load data (backend first; busuanzi fetched once as fallback)
         async function loadData() {
-            if (busuanziData === null) {
+            // 1) 尝试统计后端（真实数据）
+            backendData = await fetchBackendStats();
+            if (backendData) markRealData();
+            // 2) 不蒜子作为后备数据源
+            if (backendData === null && busuanziData === null) {
                 busuanziData = await loadBusuanzi();
             }
             await Promise.all([
@@ -922,20 +991,35 @@
             loadPageStats();
         }
 
-        // Check stats service status (busuanzi)
+        // Check stats service status (backend + busuanzi)
         function checkApiStatus() {
             const badge = document.getElementById('apiStatus');
-            if (busuanziData && typeof busuanziData.site_pv === 'number') {
-                badge.textContent = '● 在线（真实数据）';
+            if (backendData) {
+                badge.textContent = '● 在线（后端真实数据）';
                 badge.className = 'badge green';
+            } else if (busuanziData && typeof busuanziData.site_pv === 'number') {
+                badge.textContent = '● 后端离线（不蒜子真实数据 + 演示图表）';
+                badge.className = 'badge yellow';
             } else {
                 badge.textContent = '● 离线（展示本地数据）';
                 badge.className = 'badge yellow';
             }
         }
 
-        // Load stats — real data from busuanzi
+        // Load stats — real data from backend (fallback: busuanzi)
         async function loadStats() {
+            if (backendData) {
+                const pv = backendData.totals.pv || 0;
+                const uv = backendData.totals.uv || 0;
+                const homePv = (backendData.pages && backendData.pages['/']) || 0;
+                const avg = uv > 0 ? (pv / uv) : 0;
+
+                document.getElementById('totalVisits').textContent = formatNum(pv);
+                document.getElementById('todayVisits').textContent = formatNum(uv);
+                document.getElementById('onlineUsers').textContent = formatNum(homePv);
+                document.getElementById('uniqueVisitors').textContent = avg.toFixed(1);
+                return;
+            }
             if (busuanziData && typeof busuanziData.site_pv === 'number') {
                 const pv = busuanziData.site_pv || 0;
                 const uv = busuanziData.site_uv || 0;
@@ -963,8 +1047,13 @@
             let labels = [];
             let data = [];
 
-            // 详细趋势数据需要后端统计服务支持，当前以最近累计数据推演展示
-            if (labels.length === 0) {
+            if (backendData && Array.isArray(backendData.daily)) {
+                // 后端真实数据：近7天每日 PV
+                backendData.daily.forEach(d => {
+                    labels.push(d.date);
+                    data.push(d.pv);
+                });
+            } else if (labels.length === 0) {
                 // Generate fallback
                 const days = [];
                 for (let i = 6; i >= 0; i--) {
@@ -1023,18 +1112,24 @@
 
         // Device chart
         async function loadDeviceChart() {
-            // 设备分布明细需要后端统计服务支持，当前为演示数据
-            const data = { desktop: 45, mobile: 40, tablet: 15 };
+            let devData = null;
+            if (backendData && backendData.devices && Object.keys(backendData.devices).length) {
+                // 后端真实数据
+                devData = backendData.devices;
+            } else {
+                // 演示数据（后端离线时）
+                devData = { desktop: 45, mobile: 40, tablet: 15 };
+            }
 
             const ctx = document.getElementById('deviceChart').getContext('2d');
             if (deviceChart) deviceChart.destroy();
             deviceChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['桌面端', '移动端', '平板'],
+                    labels: Object.keys(devData).map(deviceLabel),
                     datasets: [{
-                        data: [data.desktop || 45, data.mobile || 40, data.tablet || 15],
-                        backgroundColor: ['#6C5CE7', '#00cec9', '#fdcb6e'],
+                        data: Object.values(devData),
+                        backgroundColor: ['#6C5CE7', '#00cec9', '#fdcb6e', '#e74c3c', '#55efc4'],
                         borderWidth: 0,
                         hoverOffset: 8,
                     }]
@@ -1054,12 +1149,20 @@
 
         // Hourly chart
         async function loadHourlyChart() {
-            // 小时分布明细需要后端统计服务支持，当前为演示数据
             let labels = [];
             let data = [];
-            for (let i = 0; i < 24; i++) {
-                labels.push(`${i}:00`);
-                data.push(Math.floor(Math.random() * 50) + (i > 8 && i < 22 ? 20 : 5));
+            if (backendData && Array.isArray(backendData.hourly)) {
+                // 后端真实数据：今日每小时 PV
+                backendData.hourly.forEach(h => {
+                    labels.push(h.h + ':00');
+                    data.push(h.v);
+                });
+            } else {
+                // 演示数据（后端离线时）
+                for (let i = 0; i < 24; i++) {
+                    labels.push(`${i}:00`);
+                    data.push(Math.floor(Math.random() * 50) + (i > 8 && i < 22 ? 20 : 5));
+                }
             }
 
             const ctx = document.getElementById('hourlyChart').getContext('2d');
@@ -1091,9 +1194,22 @@
 
         // Source chart
         async function loadSourceChart() {
-            // 来源分布明细需要后端统计服务支持，当前为演示数据
-            let labels = ['直接访问', '搜索引擎', '社交媒体', '外部链接'];
-            let data = [35, 30, 20, 15];
+            let labels;
+            let data;
+            if (backendData && backendData.sources && Object.keys(backendData.sources).length) {
+                // 后端真实数据：按访问次数排序，取前 6
+                const entries = Object.entries(backendData.sources)
+                    .sort((a, b) => b[1] - a[1]);
+                const top = entries.slice(0, 6);
+                const restSum = entries.slice(6).reduce((s, e) => s + e[1], 0);
+                labels = top.map(e => sourceLabel(e[0]));
+                data = top.map(e => e[1]);
+                if (restSum > 0) { labels.push('其他'); data.push(restSum); }
+            } else {
+                // 演示数据（后端离线时）
+                labels = ['直接访问', '搜索引擎', '社交媒体', '外部链接'];
+                data = [35, 30, 20, 15];
+            }
 
             const ctx = document.getElementById('sourceChart').getContext('2d');
             if (sourceChart) sourceChart.destroy();
@@ -1185,9 +1301,26 @@
 
         // Recent visitors
         async function loadRecentVisitors() {
-            // 访客明细需要后端统计服务支持，当前为演示数据（区域字段已支持真实IP归属地解析）
             let visitors = [];
-            {
+            if (backendData && Array.isArray(backendData.recent) && backendData.recent.length) {
+                // 后端真实数据
+                const todayStr = new Date().toDateString();
+                visitors = backendData.recent.map(v => {
+                    const d = new Date(v.t);
+                    const time = d.toDateString() === todayStr
+                        ? d.toTimeString().slice(0, 5)
+                        : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.toTimeString().slice(0, 5);
+                    return {
+                        time: time,
+                        source: sourceLabel(v.src),
+                        page: v.path,
+                        device: deviceLabel(v.dev),
+                        region: v.region,
+                        ip: v.ip
+                    };
+                });
+            } else {
+                // 演示数据（后端离线时）
                 const sources = ['直接访问', 'Google', 'Bing', '百度', '社交媒体'];
                 const pages = ['/', '/', '/', '/', '/'];
                 const devices = ['桌面端', '移动端', '桌面端', '移动端', '平板'];
@@ -1220,9 +1353,25 @@
 
         // All visitors
         async function loadAllVisitors() {
-            // 访客明细需要后端统计服务支持，当前为演示数据（区域字段已支持真实IP归属地解析）
             let visitors = [];
-            {
+            if (backendData && Array.isArray(backendData.visitors) && backendData.visitors.length) {
+                // 后端真实数据（按最近访问排序）
+                visitors = backendData.visitors.map(v => ({
+                    ip: v.ip,
+                    firstVisit: new Date(v.first).toLocaleString('zh-CN'),
+                    lastVisit: new Date(v.last).toLocaleString('zh-CN'),
+                    visits: v.n || 1,
+                    device: deviceLabel(v.dev),
+                    source: sourceLabel(v.src),
+                    region: v.region,
+                }));
+                if (!visitors.length) {
+                    const tbody = document.getElementById('allVisitors');
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted); padding: 30px;">暂无访客记录（主站有访问后这里会实时显示）</td></tr>';
+                    return;
+                }
+            } else {
+                // 演示数据（后端离线时）
                 const devices = ['桌面端', '移动端', '平板'];
                 const sources = ['直接访问', 'Google', 'Bing', '百度'];
                 visitors = Array.from({ length: 15 }, (_, i) => {
@@ -1260,11 +1409,15 @@
             `).join('');
         }
 
-        // Page stats — derived from real busuanzi data
-        // 站点仅含主站(/)与本后台(/admin.html)，故 site_pv = 主站PV + 后台PV，可真实推导
+        // Page stats — real data from backend (fallback: busuanzi derivation)
         async function loadPageStats() {
             let pages = [];
-            if (busuanziData && typeof busuanziData.site_pv === 'number') {
+            if (backendData && backendData.pages && Object.keys(backendData.pages).length) {
+                // 后端真实数据：按访问量排序
+                pages = Object.entries(backendData.pages)
+                    .map(([path, visits]) => ({ path: path, visits: visits }))
+                    .sort((a, b) => b.visits - a.visits);
+            } else if (busuanziData && typeof busuanziData.site_pv === 'number') {
                 const sitePv = busuanziData.site_pv || 0;
                 const adminPv = busuanziData.page_pv || 0; // 本页(后台)的真实PV
                 const homePv = Math.max(sitePv - adminPv, 0);
