@@ -7,9 +7,6 @@
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noydir, none">
     <meta name="referrer" content="no-referrer">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.11.0/build/sha256.min.js"></script>
     <style>
@@ -39,7 +36,7 @@
         }
 
         body {
-            font-family: 'Noto Sans SC', -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
@@ -738,6 +735,26 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="chart-card" style="max-width: 600px; margin-top: 20px;">
+                    <h3>🔑 修改登录密码</h3>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+                        修改后立即全局生效（下次登录、统计后端验证均使用新密码）。建议设置为好记但不易被猜到的组合。
+                    </p>
+                    <div style="display: flex; flex-direction: column; gap: 12px; max-width: 380px;">
+                        <input type="password" id="oldPass" placeholder="当前密码" autocomplete="off"
+                               style="background: var(--bg-hover); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-family: inherit; font-size: 14px; outline: none;">
+                        <input type="password" id="newPass" placeholder="新密码（至少 6 位）" autocomplete="off"
+                               style="background: var(--bg-hover); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-family: inherit; font-size: 14px; outline: none;">
+                        <input type="password" id="newPass2" placeholder="再次输入新密码" autocomplete="off"
+                               style="background: var(--bg-hover); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-family: inherit; font-size: 14px; outline: none;">
+                        <button id="pwBtn" onclick="changePassword()"
+                                style="background: linear-gradient(135deg, #6C5CE7, #00cec9); color: #fff; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600;">
+                            确认修改
+                        </button>
+                        <div id="pwMsg" style="display: none; font-size: 13px; line-height: 1.6;"></div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -909,14 +926,34 @@
         async function doLogin() {
             if (isLocked()) { showLockState(); return; }
             const input = document.getElementById('passkeyInput').value;
-            const digest = await sha256Hex(AUTH.salt + input);
             const err = document.getElementById('loginError');
-            if (!digest) {
-                err.textContent = '安全模块加载失败，请刷新页面重试';
-                err.style.display = 'block';
-                return;
+            const btn = document.querySelector('#loginScreen button');
+            if (!input) return;
+
+            // 1) 优先由后端校验（密码修改后立即生效）
+            if (btn) { btn.disabled = true; btn.textContent = '验证中...'; }
+            const online = await verifyTokenOnline(input);
+            if (btn) { btn.disabled = false; btn.textContent = '登录'; }
+
+            let pass = false;
+            if (online === true) {
+                pass = true;
+            } else if (online === false) {
+                pass = false;
+            } else {
+                // 2) 后端不可达时，回退本地哈希校验（含本机修改过的新密码）
+                const digest = await sha256Hex(AUTH.salt + input);
+                if (!digest) {
+                    err.textContent = '安全模块加载失败，请刷新页面重试';
+                    err.style.display = 'block';
+                    return;
+                }
+                let expected = AUTH.hash;
+                try { expected = localStorage.getItem('xm_auth_hash') || AUTH.hash; } catch (e) { /* keep */ }
+                pass = (digest === expected);
             }
-            if (digest === AUTH.hash) {
+
+            if (pass) {
                 localStorage.removeItem('xm_fails');
                 localStorage.removeItem('xm_lock');
                 clearInterval(lockTimer);
@@ -929,6 +966,69 @@
                 loadData();
             } else {
                 registerFail();
+            }
+        }
+
+        // 在线校验密钥：true=正确 / false=错误 / null=后端不可达
+        async function verifyTokenOnline(token) {
+            try {
+                const res = await fetch(API_BASE + '/stats', {
+                    headers: { 'X-Token': token },
+                    signal: AbortSignal.timeout(6000)
+                });
+                if (res.status === 401) return false;
+                if (res.ok) return true;
+                return null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 修改登录密码（调用后端 /set-token，全局立即生效）
+        async function changePassword() {
+            const oldp = document.getElementById('oldPass').value;
+            const np = document.getElementById('newPass').value;
+            const np2 = document.getElementById('newPass2').value;
+            const msg = document.getElementById('pwMsg');
+            const btn = document.getElementById('pwBtn');
+            msg.style.display = 'block';
+            msg.style.color = '#e67e22';
+
+            if (!oldp || !np || !np2) { msg.textContent = '请填写完整三项内容'; return; }
+            if (np !== np2) { msg.textContent = '两次输入的新密码不一致'; return; }
+            if (np.length < 6) { msg.textContent = '新密码至少需要 6 位'; return; }
+            if (np === oldp) { msg.textContent = '新密码不能与当前密码相同'; return; }
+
+            if (btn) { btn.disabled = true; btn.textContent = '提交中...'; }
+            let ok = null;
+            try {
+                const res = await fetch(API_BASE + '/set-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Token': oldp },
+                    body: JSON.stringify({ token: np }),
+                    signal: AbortSignal.timeout(8000)
+                });
+                ok = res.ok;
+            } catch (e) { ok = null; }
+            if (btn) { btn.disabled = false; btn.textContent = '确认修改'; }
+
+            if (ok === true) {
+                // 更新本机会话与离线校验哈希
+                backendToken = np;
+                sessionStorage.setItem('xm_tok', np);
+                try {
+                    const digest = await sha256Hex(AUTH.salt + np);
+                    if (digest) localStorage.setItem('xm_auth_hash', digest);
+                } catch (e) { /* ignore */ }
+                msg.style.color = '#00b894';
+                msg.textContent = '✅ 密码修改成功！下次登录请使用新密码';
+                document.getElementById('oldPass').value = '';
+                document.getElementById('newPass').value = '';
+                document.getElementById('newPass2').value = '';
+            } else if (ok === false) {
+                msg.textContent = '❌ 当前密码不正确，修改失败';
+            } else {
+                msg.textContent = '⚠️ 统计后端暂时无法连接，请稍后再试';
             }
         }
 
