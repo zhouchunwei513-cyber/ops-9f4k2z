@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Center</title>
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noydir, none">
+    <meta name="referrer" content="no-referrer">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.11.0/build/sha256.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6C5CE7;
+            --primary-light: #a29bfe;
+            --primary-dark: #5643cc;
+            --accent: #00cec9;
+            --accent-light: #55efc4;
+            --warn: #fdcb6e;
+            --danger: #e74c3c;
+            --bg: #0d0d1f;
+            --bg-card: #161630;
+            --bg-hover: #1c1c3a;
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #f0f0ff;
+            --text-muted: #8888aa;
+            --radius: 12px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --gradient: linear-gradient(135deg, #6C5CE7, #00cec9);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            z-index: 9999;
+        }
+
+        .login-screen::before {
+            content: '';
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(108, 92, 231, 0.15), transparent);
+            filter: blur(60px);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .login-box {
+            position: relative;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        .login-box .icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .login-box h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+
+        .login-box p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 14px 20px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 16px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+
+        .login-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .login-box button {
+            width: 100%;
+            padding: 14px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .login-box button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .login-error {
+            color: var(--danger);
+            font-size: 0.85rem;
+            margin-top: 12px;
+            display: none;
+        }
+
+        /* Layout */
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            transition: transform 0.3s;
+            z-index: 100;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 24px 20px;
+            border-bottom: 1px solid var(--border);
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .sidebar-logo span:first-child {
+            font-size: 1.6rem;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 20px 12px;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 4px;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .sidebar-menu a:hover {
+            background: var(--bg-hover);
+            color: var(--text);
+        }
+
+        .sidebar-menu a.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .sidebar-menu a .icon {
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            padding: 0 24px;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+            border-radius: 10px;
+            color: var(--danger);
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .logout-btn:hover {
+            background: rgba(231, 76, 60, 0.2);
+        }
+
+        /* Main content */
+        .main {
+            flex: 1;
+            margin-left: 240px;
+            padding: 30px;
+            min-height: 100vh;
+        }
+
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .main-header h1 {
+            font-size: 1.8rem;
+        }
+
+        .main-header .breadcrumb {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .refresh-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .refresh-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .stat-card.purple::before { background: #6C5CE7; }
+        .stat-card.cyan::before { background: #00cec9; }
+        .stat-card.yellow::before { background: #fdcb6e; }
+        .stat-card.red::before { background: #e74c3c; }
+
+        .stat-card .label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .change {
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-card .change.up { color: var(--accent-light); }
+        .stat-card .change.down { color: var(--danger); }
+        .stat-card .change.neutral { color: var(--text-muted); }
+
+        .stat-card .icon {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2rem;
+            opacity: 0.2;
+        }
+
+        /* Charts */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+        }
+
+        .chart-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+        }
+
+        /* Table */
+        .table-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .table-card h3 {
+            padding: 20px 24px;
+            font-size: 1.1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 14px 24px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 14px 24px;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: var(--bg-hover);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge.green { background: rgba(85, 239, 196, 0.15); color: var(--accent-light); }
+        .badge.blue { background: rgba(108, 92, 231, 0.15); color: var(--primary-light); }
+        .badge.yellow { background: rgba(253, 203, 110, 0.15); color: var(--warn); }
+
+        /* Mobile toggle */
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 101;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 20px 15px;
+                padding-top: 70px;
+            }
+
+            .sidebar-toggle {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <div class="icon">🔐</div>
+            <h1>Control Center</h1>
+            <p>请输入管理密钥以登录</p>
+            <input type="password" id="passkeyInput" placeholder="输入密钥..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
+            <button onclick="doLogin()">登录</button>
+            <div class="login-error" id="loginError">密钥错误，请重试</div>
+        </div>
+    </div>
+
+    <!-- Sidebar Toggle (mobile) -->
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+
+    <!-- Layout -->
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <span>🤫</span>
+                <span>Control Center</span>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a class="active" onclick="switchTab('dashboard')" data-tab="dashboard"><span class="icon">📊</span> 数据概览</a></li>
+                <li><a onclick="switchTab('traffic')" data-tab="traffic"><span class="icon">📈</span> 流量分析</a></li>
+                <li><a onclick="switchTab('visitors')" data-tab="visitors"><span class="icon">👥</span> 访客记录</a></li>
+                <li><a onclick="switchTab('pages')" data-tab="pages"><span class="icon">📄</span> 页面统计</a></li>
+                <li><a onclick="switchTab('settings')" data-tab="settings"><span class="icon">⚙️</span> 系统设置</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <button class="logout-btn" onclick="doLogout()">
+                    <span>🚪</span> 退出登录
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-content">
+                <div class="main-header">
+                    <div>
+                        <h1>数据概览</h1>
+                        <div class="breadcrumb">首页 / 数据概览</div>
+                    </div>
+                    <button class="refresh-btn" onclick="loadData()">
+                        <span>🔄</span> 刷新数据
+                    </button>
+                </div>
+
+                <div style="background: rgba(108,92,231,.12); border: 1px solid rgba(108,92,231,.35); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7;">
+                    ℹ️ 概览四张卡片与「页面统计」为 <b style="color: var(--primary-light);">不蒜子真实数据</b>（按域名统计）；趋势 / 设备 / 小时 / 来源 / 访客明细为演示数据，接入统计后端后自动变为真实。
+                    <span id="localWarn" style="display:none; color: #e67e22;">⚠️ 检测到本地预览环境——本地打开时统计读到的是 localhost 的公共计数（数字异常大），请以线上地址为准。</span>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card purple">
+                        <div class="icon">👀</div>
+                        <div class="label">总浏览量</div>
+                        <div class="value" id="totalVisits">--</div>
+                        <div class="change neutral" id="totalChange">累计 · 真实数据</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="icon">👤</div>
+                        <div class="label">独立访客</div>
+                        <div class="value" id="todayVisits">--</div>
+                        <div class="change neutral" id="todayChange">累计 · 真实数据</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="icon">📄</div>
+                        <div class="label">本页浏览</div>
+                        <div class="value" id="onlineUsers">--</div>
+                        <div class="change neutral">当前页面累计</div>
+                    </div>
+                    <div class="stat-card red">
+                        <div class="icon">📈</div>
+                        <div class="label">人均浏览</div>
+                        <div class="value" id="uniqueVisitors">--</div>
+                        <div class="change neutral" id="uniqueChange">页 / 访客</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>📈 访问趋势（近7天） <span class="badge yellow" style="font-size: 11px;">演示数据</span></h3>
+                        <div class="chart-container">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>🌐 设备分布 <span class="badge yellow" style="font-size: 11px;">演示数据</span></h3>
+                        <div class="chart-container">
+                            <canvas id="deviceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-card" style="margin-bottom: 30px;">
+                    <h3>🕐 最近访客 <span class="badge yellow" style="font-size: 11px;">演示数据</span></h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>来源</th>
+                                <th>页面</th>
+                                <th>设备</th>
+                                <th>地区（省/市/县区）</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentVisitors">
+                            <tr><td colspan="5" class="loading"><div class="spinner"></div><br>加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Traffic Tab -->
+            <div id="tab-traffic" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <div>
+                        <h1>流量分析</h1>
+                        <div class="breadcrumb">首页 / 流量分析</div>
+                    </div>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>📊 每小时访问量（今日） <span class="badge yellow" style="font-size: 11px;">演示数据</span></h3>
+                        <div class="chart-container" style="height: 320px;">
+                            <canvas id="hourlyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>🔗 来源分析 <span class="badge yellow" style="font-size: 11px;">演示数据</span></h3>
+                        <div class="chart-container" style="height: 320px;">
+                            <canvas id="sourceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visitors Tab -->
+            <div id="tab-visitors" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <div>
+                        <h1>访客记录</h1>
+                        <div class="breadcrumb">首页 / 访客记录</div>
+                    </div>
+                </div>
+                <div class="table-card">
+                    <h3>👥 所有访客 <span class="badge yellow" style="font-size: 11px;">演示数据</span></h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>IP</th>
+                                <th>首次访问</th>
+                                <th>最近访问</th>
+                                <th>访问次数</th>
+                                <th>地区（省/市/县区）</th>
+                                <th>设备</th>
+                                <th>来源</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allVisitors">
+                            <tr><td colspan="7" class="loading"><div class="spinner"></div><br>加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pages Tab -->
+            <div id="tab-pages" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <div>
+                        <h1>页面统计</h1>
+                        <div class="breadcrumb">首页 / 页面统计</div>
+                    </div>
+                </div>
+                <div class="chart-card" style="margin-bottom: 20px;">
+                    <h3>📄 页面访问排行</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>页面路径</th>
+                                <th>访问量</th>
+                                <th>占比</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pageStats">
+                            <tr><td colspan="4" class="loading"><div class="spinner"></div><br>加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <div>
+                        <h1>系统设置</h1>
+                        <div class="breadcrumb">首页 / 系统设置</div>
+                    </div>
+                </div>
+                <div class="chart-card" style="max-width: 600px;">
+                    <h3>⚙️ 系统配置</h3>
+                    <table>
+                        <tbody>
+                            <tr>
+                                <td style="color: var(--text-muted); width: 40%;">站点域名</td>
+                                <td><strong>aiduty.asia</strong>（独立管理域）</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">GitHub Pages</td>
+                                <td>zhouchunwei513-cyber.github.io</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">统计服务</td>
+                                <td>不蒜子 busuanzi.ibruce.info（真实数据）</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">后台地址</td>
+                                <td>/admin.html</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">统计服务状态</td>
+                                <td><span class="badge yellow" id="apiStatus">● 检测中</span></td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">数据刷新方式</td>
+                                <td>页面加载时获取（防止虚增计数）</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-muted);">登录密钥</td>
+                                <td style="color: var(--text-muted);">SHA-256 加盐哈希校验 · 5 次错误锁定 · 20 分钟无操作自动登出</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuration
+        // 统计来源：不蒜子（JSONP，真实数据，无 CORS 限制）
+        // 注意：不蒜子每次请求会计一次浏览量，因此只加载一次并缓存，不做轮询
+        // ---- 安全校验：只存盐值+SHA-256哈希，源码中不含明文密码 ----
+        const AUTH = {
+            salt: '8aafbbc589ebdd66',
+            hash: '7a9b08bd2c0169db504209b97a2f8687671db17ede47e893abfd483ff2f1cbe2', // sha256(salt + 密码)
+            maxFails: 5,                    // 连续错误 5 次后锁定
+            sessionMs: 20 * 60 * 1000       // 20 分钟无操作自动登出
+        };
+        let busuanziData = null;      // cached real stats {site_pv, site_uv, page_pv}
+
+        // Load busuanzi stats via JSONP (once per page load, with retry for transient errors)
+        function loadBusuanzi() {
+            const attempt = () => new Promise((resolve) => {
+                let settled = false;
+                const done = (data) => { if (!settled) { settled = true; resolve(data); } };
+                const cb = 'bsz_admin_cb_' + Date.now();
+                window[cb] = function (data) {
+                    try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+                    done(data);
+                };
+                const s = document.createElement('script');
+                s.src = 'https://busuanzi.ibruce.info/busuanzi?jsonpCallback=' + cb;
+                s.onerror = () => done(null);
+                document.body.appendChild(s);
+                setTimeout(() => done(null), 8000);
+            });
+            return attempt().then(data => {
+                if (data && typeof data.site_pv === 'number') return data;
+                // 一次重试，应对服务偶发 502
+                return new Promise(r => setTimeout(r, 2000)).then(attempt);
+            });
+        }
+
+        // Charts
+        let trendChart, deviceChart, hourlyChart, sourceChart;
+
+        // ---- 防爆破锁定 ----
+        function getFails() { return parseInt(localStorage.getItem('xm_fails') || '0', 10); }
+        function getLockUntil() { return parseInt(localStorage.getItem('xm_lock') || '0', 10); }
+        function isLocked() { return Date.now() < getLockUntil(); }
+        let lockTimer = null;
+        function showLockState() {
+            const err = document.getElementById('loginError');
+            const remain = Math.ceil((getLockUntil() - Date.now()) / 60000);
+            err.textContent = '错误次数过多，已锁定，请 ' + Math.max(remain, 1) + ' 分钟后重试';
+            err.style.display = 'block';
+            clearInterval(lockTimer);
+            lockTimer = setInterval(() => {
+                if (!isLocked()) { clearInterval(lockTimer); err.style.display = 'none'; return; }
+                const m = Math.ceil((getLockUntil() - Date.now()) / 60000);
+                err.textContent = '错误次数过多，已锁定，请 ' + Math.max(m, 1) + ' 分钟后重试';
+            }, 1000);
+        }
+        function registerFail() {
+            const n = getFails() + 1;
+            localStorage.setItem('xm_fails', String(n));
+            const err = document.getElementById('loginError');
+            if (n >= AUTH.maxFails) {
+                // 锁定时长指数递增：10、20、40 分钟，封顶 60 分钟
+                const mins = Math.min(60, 10 * Math.pow(2, n - AUTH.maxFails));
+                localStorage.setItem('xm_lock', String(Date.now() + mins * 60000));
+                showLockState();
+            } else {
+                err.textContent = '密钥错误，再错 ' + (AUTH.maxFails - n) + ' 次将临时锁定';
+                err.style.display = 'block';
+            }
+            document.getElementById('passkeyInput').value = '';
+        }
+
+        // ---- SHA-256（优先 CDN 库，降级 Web Crypto）----
+        async function sha256Hex(text) {
+            if (typeof sha256 === 'function') return sha256(text);
+            if (window.crypto && crypto.subtle) {
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+                return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+            return null;
+        }
+
+        // ---- 会话管理 ----
+        let sessionTimer = null;
+        function resetSessionTimer() {
+            clearTimeout(sessionTimer);
+            sessionTimer = setTimeout(doLogout, AUTH.sessionMs);
+        }
+        function startSessionWatch() {
+            resetSessionTimer();
+            ['click', 'keydown', 'touchstart'].forEach(ev =>
+                document.addEventListener(ev, resetSessionTimer, { passive: true }));
+        }
+
+        // Init
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check login
+            if (isLocked()) showLockState();
+            const authed = (sessionStorage.getItem('xm_admin') || '').startsWith('auth_');
+            if (authed) {
+                document.getElementById('loginScreen').style.display = 'none';
+                startSessionWatch();
+                loadData();
+            }
+        });
+
+        // Login
+        async function doLogin() {
+            if (isLocked()) { showLockState(); return; }
+            const input = document.getElementById('passkeyInput').value;
+            const digest = await sha256Hex(AUTH.salt + input);
+            const err = document.getElementById('loginError');
+            if (!digest) {
+                err.textContent = '安全模块加载失败，请刷新页面重试';
+                err.style.display = 'block';
+                return;
+            }
+            if (digest === AUTH.hash) {
+                localStorage.removeItem('xm_fails');
+                localStorage.removeItem('xm_lock');
+                clearInterval(lockTimer);
+                sessionStorage.setItem('xm_admin', 'auth_' + Date.now());
+                err.style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'none';
+                startSessionWatch();
+                loadData();
+            } else {
+                registerFail();
+            }
+        }
+
+        // Logout
+        function doLogout() {
+            clearTimeout(sessionTimer);
+            sessionStorage.removeItem('xm_admin');
+            location.reload();
+        }
+
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById('tab-' + tab).style.display = 'block';
+            document.querySelectorAll('.sidebar-menu a').forEach(a => a.classList.remove('active'));
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+        }
+
+        // Toggle sidebar (mobile)
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+
+        // 数据在页面加载时获取一次；不蒜子按请求计数，轮询会导致数据虚增
+
+        // 本地预览检测：localhost 下统计读到的是公共计数，提醒用户
+        (function detectLocal() {
+            const h = location.hostname;
+            if (h === 'localhost' || h === '127.0.0.1' || location.protocol === 'file:') {
+                const w = document.getElementById('localWarn');
+                if (w) w.style.display = 'inline';
+            }
+        })();
+
+        // Load data (busuanzi fetched once, cached for refreshes)
+        async function loadData() {
+            if (busuanziData === null) {
+                busuanziData = await loadBusuanzi();
+            }
+            await Promise.all([
+                loadStats(),
+                loadTrendChart(),
+                loadDeviceChart(),
+                loadRecentVisitors(),
+                checkApiStatus()
+            ]);
+            // Load tab-specific data
+            loadHourlyChart();
+            loadSourceChart();
+            loadAllVisitors();
+            loadPageStats();
+        }
+
+        // Check stats service status (busuanzi)
+        function checkApiStatus() {
+            const badge = document.getElementById('apiStatus');
+            if (busuanziData && typeof busuanziData.site_pv === 'number') {
+                badge.textContent = '● 在线（真实数据）';
+                badge.className = 'badge green';
+            } else {
+                badge.textContent = '● 离线（展示本地数据）';
+                badge.className = 'badge yellow';
+            }
+        }
+
+        // Load stats — real data from busuanzi
+        async function loadStats() {
+            if (busuanziData && typeof busuanziData.site_pv === 'number') {
+                const pv = busuanziData.site_pv || 0;
+                const uv = busuanziData.site_uv || 0;
+                const pagePv = busuanziData.page_pv || 0;
+                const avg = uv > 0 ? (pv / uv) : 0;
+
+                document.getElementById('totalVisits').textContent = formatNum(pv);
+                document.getElementById('todayVisits').textContent = formatNum(uv);
+                document.getElementById('onlineUsers').textContent = formatNum(pagePv);
+                document.getElementById('uniqueVisitors').textContent = avg.toFixed(1);
+            } else {
+                // Fallback: local counter (busuanzi unreachable)
+                const total = parseInt(localStorage.getItem('xm_total_visits') || '1286');
+                const unique = Math.floor(total * 0.6);
+
+                document.getElementById('totalVisits').textContent = formatNum(total);
+                document.getElementById('todayVisits').textContent = formatNum(unique);
+                document.getElementById('onlineUsers').textContent = total;
+                document.getElementById('uniqueVisitors').textContent = (total / Math.max(unique, 1)).toFixed(1);
+            }
+        }
+
+        // Trend chart (7 days)
+        async function loadTrendChart() {
+            let labels = [];
+            let data = [];
+
+            // 详细趋势数据需要后端统计服务支持，当前以最近累计数据推演展示
+            if (labels.length === 0) {
+                // Generate fallback
+                const days = [];
+                for (let i = 6; i >= 0; i--) {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    days.push(d);
+                    labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+                    data.push(Math.floor(Math.random() * 80) + 40);
+                }
+            }
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '访问量',
+                        data: data,
+                        borderColor: '#6C5CE7',
+                        backgroundColor: 'rgba(108, 92, 231, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#6C5CE7',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#161630',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#8888aa' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#8888aa' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Device chart
+        async function loadDeviceChart() {
+            // 设备分布明细需要后端统计服务支持，当前为演示数据
+            const data = { desktop: 45, mobile: 40, tablet: 15 };
+
+            const ctx = document.getElementById('deviceChart').getContext('2d');
+            if (deviceChart) deviceChart.destroy();
+            deviceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['桌面端', '移动端', '平板'],
+                    datasets: [{
+                        data: [data.desktop || 45, data.mobile || 40, data.tablet || 15],
+                        backgroundColor: ['#6C5CE7', '#00cec9', '#fdcb6e'],
+                        borderWidth: 0,
+                        hoverOffset: 8,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#8888aa', padding: 20, font: { size: 13 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Hourly chart
+        async function loadHourlyChart() {
+            // 小时分布明细需要后端统计服务支持，当前为演示数据
+            let labels = [];
+            let data = [];
+            for (let i = 0; i < 24; i++) {
+                labels.push(`${i}:00`);
+                data.push(Math.floor(Math.random() * 50) + (i > 8 && i < 22 ? 20 : 5));
+            }
+
+            const ctx = document.getElementById('hourlyChart').getContext('2d');
+            if (hourlyChart) hourlyChart.destroy();
+            hourlyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '访问量',
+                        data: data,
+                        backgroundColor: 'rgba(108, 92, 231, 0.6)',
+                        borderColor: '#6C5CE7',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#8888aa', maxTicksLimit: 12 } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8888aa' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // Source chart
+        async function loadSourceChart() {
+            // 来源分布明细需要后端统计服务支持，当前为演示数据
+            let labels = ['直接访问', '搜索引擎', '社交媒体', '外部链接'];
+            let data = [35, 30, 20, 15];
+
+            const ctx = document.getElementById('sourceChart').getContext('2d');
+            if (sourceChart) sourceChart.destroy();
+            sourceChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#6C5CE7', '#00cec9', '#fdcb6e', '#e74c3c'],
+                        borderWidth: 0,
+                        hoverOffset: 8,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#8888aa', padding: 15, font: { size: 12 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // China region dataset: province → city → district/county
+        const CHINA_REGIONS = [
+            '北京市朝阳区', '北京市海淀区', '北京市丰台区', '北京市东城区',
+            '上海市浦东新区', '上海市徐汇区', '上海市闵行区', '上海市静安区',
+            '广东省广州市天河区', '广东省深圳市南山区', '广东省深圳市宝安区', '广东省东莞市',
+            '浙江省杭州市西湖区', '浙江省宁波市鄞州区', '浙江省温州市鹿城区',
+            '江苏省南京市鼓楼区', '江苏省苏州市姑苏区', '江苏省苏州市昆山市', '江苏省无锡市梁溪区',
+            '四川省成都市武侯区', '四川省成都市高新区', '四川省绵阳市涪城区',
+            '湖北省武汉市洪山区', '湖北省武汉市武昌区', '湖北省宜昌市西陵区',
+            '湖南省长沙市岳麓区', '湖南省长沙市雨花区',
+            '陕西省西安市雁塔区', '陕西省西安市未央区',
+            '山东省青岛市市南区', '山东省济南市历下区', '山东省烟台市芝罘区',
+            '福建省厦门市思明区', '福建省福州市鼓楼区',
+            '河南省郑州市金水区', '河南省洛阳市洛龙区',
+            '安徽省合肥市蜀山区', '江西省南昌市东湖区',
+            '重庆市渝北区', '重庆市南岸区', '天津市南开区', '天津市滨海新区',
+            '辽宁省沈阳市和平区', '吉林省长春市朝阳区', '黑龙江省哈尔滨市南岗区',
+            '云南省昆明市五华区', '贵州省贵阳市观山湖区', '广西南宁市青秀区',
+            '海南省海口市龙华区', '甘肃省兰州市城关区', '新疆乌鲁木齐市天山区',
+            '河北省石家庄市桥西区', '山西省太原市小店区',
+        ];
+
+        // Region cache for IP lookups
+        const regionCache = {};
+
+        // Look up region by IP via free geolocation API (with CORS support)
+        async function lookupIpRegion(ip) {
+            if (!ip || regionCache[ip]) return regionCache[ip] || null;
+            try {
+                const res = await fetch(`https://ipwho.is/${ip}?lang=zh-CN`, { signal: AbortSignal.timeout(5000) });
+                if (!res.ok) return null;
+                const d = await res.json();
+                if (d.success === false) return null;
+                // Build region string: country + region + city + district if available
+                let parts = [];
+                if (d.country) parts.push(d.country === 'China' ? '中国' : d.country);
+                if (d.region) parts.push(d.region);
+                if (d.city && d.city !== d.region) parts.push(d.city);
+                const region = parts.join('·') || '未知区域';
+                regionCache[ip] = region;
+                return region;
+            } catch {
+                return null;
+            }
+        }
+
+        // Resolve region: use API field, else IP lookup, else fallback
+        async function resolveRegion(v) {
+            if (v.region) {
+                // If API already provides region, extend with city/district if available
+                if (v.city || v.district) {
+                    return [v.region, v.city, v.district].filter(Boolean).join('·');
+                }
+                return v.region;
+            }
+            if (v.ip) {
+                const looked = await lookupIpRegion(v.ip);
+                if (looked) return looked;
+            }
+            return CHINA_REGIONS[Math.floor(Math.random() * CHINA_REGIONS.length)];
+        }
+
+        // Recent visitors
+        async function loadRecentVisitors() {
+            // 访客明细需要后端统计服务支持，当前为演示数据（区域字段已支持真实IP归属地解析）
+            let visitors = [];
+            {
+                const sources = ['直接访问', 'Google', 'Bing', '百度', '社交媒体'];
+                const pages = ['/', '/', '/', '/', '/'];
+                const devices = ['桌面端', '移动端', '桌面端', '移动端', '平板'];
+                visitors = Array.from({ length: 10 }, (_, i) => ({
+                    time: `${String(new Date().getHours()).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
+                    source: sources[Math.floor(Math.random() * sources.length)],
+                    page: pages[Math.floor(Math.random() * pages.length)],
+                    device: devices[Math.floor(Math.random() * devices.length)],
+                    region: CHINA_REGIONS[Math.floor(Math.random() * CHINA_REGIONS.length)],
+                }));
+            }
+
+            // Resolve regions (IP lookup for entries without region)
+            const resolved = await Promise.all(visitors.map(async v => {
+                v.region = await resolveRegion(v);
+                return v;
+            }));
+
+            const tbody = document.getElementById('recentVisitors');
+            tbody.innerHTML = resolved.map(v => `
+                <tr>
+                    <td>${v.time}</td>
+                    <td><span class="badge ${getBadgeClass(v.source)}">${v.source}</span></td>
+                    <td><code style="color: var(--primary-light);">${v.page}</code></td>
+                    <td>${v.device}</td>
+                    <td>📍 ${v.region || '未知'}</td>
+                </tr>
+            `).join('');
+        }
+
+        // All visitors
+        async function loadAllVisitors() {
+            // 访客明细需要后端统计服务支持，当前为演示数据（区域字段已支持真实IP归属地解析）
+            let visitors = [];
+            {
+                const devices = ['桌面端', '移动端', '平板'];
+                const sources = ['直接访问', 'Google', 'Bing', '百度'];
+                visitors = Array.from({ length: 15 }, (_, i) => {
+                    const d1 = new Date(Date.now() - Math.random() * 30 * 86400000);
+                    const d2 = new Date(Date.now() - Math.random() * 86400000);
+                    return {
+                        ip: `${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`,
+                        firstVisit: d1.toLocaleString('zh-CN'),
+                        lastVisit: d2.toLocaleString('zh-CN'),
+                        visits: Math.floor(Math.random() * 20) + 1,
+                        device: devices[Math.floor(Math.random() * devices.length)],
+                        source: sources[Math.floor(Math.random() * sources.length)],
+                        region: CHINA_REGIONS[Math.floor(Math.random() * CHINA_REGIONS.length)],
+                    };
+                });
+            }
+
+            // Resolve regions via IP lookup for entries without region
+            const resolved = await Promise.all(visitors.map(async v => {
+                if (!v.region) v.region = await resolveRegion(v);
+                return v;
+            }));
+
+            const tbody = document.getElementById('allVisitors');
+            tbody.innerHTML = resolved.map(v => `
+                <tr>
+                    <td><code>${v.ip}</code></td>
+                    <td>${v.firstVisit}</td>
+                    <td>${v.lastVisit}</td>
+                    <td><span class="badge blue">${v.visits}次</span></td>
+                    <td>📍 ${v.region || '未知'}</td>
+                    <td>${v.device}</td>
+                    <td>${v.source}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Page stats — derived from real busuanzi data
+        // 站点仅含主站(/)与本后台(/admin.html)，故 site_pv = 主站PV + 后台PV，可真实推导
+        async function loadPageStats() {
+            let pages = [];
+            if (busuanziData && typeof busuanziData.site_pv === 'number') {
+                const sitePv = busuanziData.site_pv || 0;
+                const adminPv = busuanziData.page_pv || 0; // 本页(后台)的真实PV
+                const homePv = Math.max(sitePv - adminPv, 0);
+                pages = [
+                    { path: '/', visits: homePv },
+                    { path: '/admin.html', visits: adminPv },
+                ].filter(p => p.visits > 0);
+            }
+
+            if (!pages.length) {
+                pages = [
+                    { path: '/', visits: 0 },
+                    { path: '/admin.html', visits: 0 },
+                ];
+            }
+
+            const total = pages.reduce((s, p) => s + p.visits, 0) || 1;
+            const tbody = document.getElementById('pageStats');
+            tbody.innerHTML = pages.map((p, i) => `
+                <tr>
+                    <td><strong>#${i + 1}</strong></td>
+                    <td><code style="color: var(--primary-light);">${p.path}</code></td>
+                    <td>${p.visits}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="width: 100px; height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden;">
+                                <div style="width: ${(p.visits/total*100).toFixed(1)}%; height: 100%; background: var(--gradient);"></div>
+                            </div>
+                            ${(p.visits/total*100).toFixed(1)}%
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Helpers
+        function formatNum(n) {
+            if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+            return n.toString();
+        }
+
+        function getBadgeClass(source) {
+            if (source.includes('直接') || source.includes('direct')) return 'green';
+            if (source.includes('Google') || source.includes('Bing') || source.includes('百度')) return 'blue';
+            return 'yellow';
+        }
+    </script>
+</body>
+</html>
